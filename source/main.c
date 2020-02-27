@@ -61,8 +61,27 @@ void TimerSet(unsigned long M) {
 }
 
 
-enum {MainMenu, ReflexGame, FollowPattern} GameState;
+enum GlobalSM {MainMenu, ReflexGame, FollowPattern} GameState;
 
+enum MainMenuSM {mainmenu_start, mainmenu_select, mainmenu_reflex, mainmenu_pattern, mainmenu_hold} mainmenu_state;
+
+void MainMenuTick() {
+    switch(mainmenu_state) {
+        case mainmenu_start:
+            mainmenu_state = mainmenu_select;
+            break;
+        case mainmenu_select:
+            if(((~PINA & 0x0F) == 0x01)) {
+                mainmenu_state = mainmenu_hold;
+            }
+            break;
+        case mainmenu_hold:
+            if((~PINA & 0x0F) == 0x00) {
+                mainmenu_state = mainmenu_start;
+                GameState = ReflexGame;// change gamemode
+            }
+    }
+}
 
 unsigned char reflex_pattern[REFLEX_SIZE];
 unsigned char current_reflex_pos;
@@ -109,7 +128,7 @@ void ReflexTick() {
 
 unsigned char speaker_temp = 0x00;
 enum SpeakerSM {speaker_start, speaker_s0, speaker_s1, speaker_wait} Speaker_state;
-
+bool hitRight = true;
 void SpeakerSM_Tick() {
     switch(Speaker_state) {
         case speaker_start:
@@ -117,6 +136,7 @@ void SpeakerSM_Tick() {
             break;
         case speaker_s0:
             if ((~PINA & 0x07) == ((0x01 << reflex_pattern[(current_reflex_pos - 1) % REFLEX_SIZE ]))) Speaker_state = speaker_s1;
+            //else hitRight = false;
             break;
         case speaker_s1:
             if (reflex_temp == 0x00) Speaker_state = speaker_wait;
@@ -165,7 +185,7 @@ int main(void) {
     DDRB = 0xFF; PORTB = 0x00;
     srand(time(0));
     
-    const unsigned long timerPeriod = 4;
+    const unsigned long timerPeriod = 3;
     TimerOn();
     TimerSet(timerPeriod);
 
@@ -173,23 +193,37 @@ int main(void) {
 
     reflex_state = reflex_on;
     unsigned long Reflex_elapsedTime = 0;
-
+    unsigned long Reflex_timer = 1000;
     ReflexSetup(reflex_pattern); // CALL THIS WHEN USER HITS OPTION IN MENU
     while (1) {
-        switch(GameState) {
+        switch(GameState) { //actions
             case MainMenu:
-                
+                MainMenuTick();
+                break;
+            case ReflexGame:
+                if(Reflex_elapsedTime >= Reflex_timer) {
+                    ReflexTick();
+                    Reflex_elapsedTime = 0;
+                    Reflex_timer -= 50;
+                }
+                if((~PINA & 0x04) || Reflex_timer < 200 ) { //reset
+                    PORTB = 0x00;
+                    reflex_state = reflex_start;
+                    GameState = MainMenu;
+                    Reflex_elapsedTime = 0;
+                    Reflex_timer = 1000;
+                    hitRight = true;
+                    break;
+                }
+                SpeakerSM_Tick();
+                SpeakerReflexSMsTick();
+                Reflex_elapsedTime+=timerPeriod;
+                break;
+            case FollowPattern: //TODO
+                break;
         }
-        if(Reflex_elapsedTime >= 500) {
-            ReflexTick();
-            Reflex_elapsedTime = 0;
-        }
-        SpeakerSM_Tick();
-        SpeakerReflexSMsTick();
         while (!TimerFlag) {}
 	    TimerFlag = 0;
-
-        Reflex_elapsedTime+=timerPeriod;
     }
     return 1;
 }
