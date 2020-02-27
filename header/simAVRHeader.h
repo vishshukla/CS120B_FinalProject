@@ -4,8 +4,9 @@
 #define F_CPU 8000000
 #endif
 
+#include "/usr/local/Cellar/simavr/HEAD-ab4c17c/include/simavr/avr/avr_mcu_section.h"
 #include <avr/sleep.h>
-#include "include/simavr/avr/avr_mcu_section.h"
+// #include "include/simavr/avr/avr_mcu_section.h"
 AVR_MCU(F_CPU,"atmega1284");
 AVR_MCU_VCD_FILE("build/results/CS120B_FinalProject_trace.vcd",1000);
 
